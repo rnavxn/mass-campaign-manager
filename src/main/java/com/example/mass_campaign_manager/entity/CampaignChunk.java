@@ -2,25 +2,33 @@ package com.example.mass_campaign_manager.entity;
 
 import com.example.mass_campaign_manager.enums.ChunkStatus;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "campaign_chunks")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class CampaignChunk {
     @Id
-    private String id; // UUID
+    private String id;
 
     @Column(name = "campaign_id", nullable = false)
     private String campaignId;
 
-    @Column(name = "job_id") // ID returned by dist-job-processor
+    @Column(name = "job_id")
     private String jobId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ChunkStatus status; // PENDING, PROCESSING, COMPLETED, FAILED
+    private ChunkStatus status;
 
     @Column(name = "chunk_index", nullable = false)
-    private int chunkIndex; // 0, 1, 2... for ordering
+    private int chunkIndex;
 
     @Column(name = "processed_count")
     private int processedCount;
