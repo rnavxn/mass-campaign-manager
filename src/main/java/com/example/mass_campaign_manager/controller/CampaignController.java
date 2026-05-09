@@ -4,6 +4,7 @@ package com.example.mass_campaign_manager.controller;
 import com.example.mass_campaign_manager.dto.CreateCampaignRequest;
 import com.example.mass_campaign_manager.dto.CampaignResponse;
 import com.example.mass_campaign_manager.service.CampaignService;
+import com.example.mass_campaign_manager.service.ChunkingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ import java.util.List;
 public class CampaignController {
 
     private final CampaignService campaignService;
+    private final ChunkingService chunkingService;
 
     @PostMapping
     public ResponseEntity<CampaignResponse> createCampaign(@Valid @RequestBody CreateCampaignRequest req) {
@@ -46,5 +48,11 @@ public class CampaignController {
             @PathVariable String id,
             @RequestParam("file") MultipartFile file) {
         return ResponseEntity.ok(campaignService.uploadRecipients(id, file));
+    }
+
+    @PostMapping("/{id}/launch")
+    public ResponseEntity<Void> launchCampaign(@PathVariable String id) {
+        chunkingService.launchCampaign(id);
+        return ResponseEntity.accepted().build();
     }
 }
