@@ -5,9 +5,11 @@ import com.example.mass_campaign_manager.config.CampaignConstants;
 import com.example.mass_campaign_manager.dto.CreateCampaignRequest;
 import com.example.mass_campaign_manager.dto.CampaignResponse;
 import com.example.mass_campaign_manager.entity.Campaign;
+import com.example.mass_campaign_manager.entity.CampaignChunk;
 import com.example.mass_campaign_manager.entity.Recipient;
 import com.example.mass_campaign_manager.enums.CampaignStatus;
 import com.example.mass_campaign_manager.enums.RecipientStatus;
+import com.example.mass_campaign_manager.repository.CampaignChunkRepository;
 import com.example.mass_campaign_manager.repository.CampaignRepository;
 import com.example.mass_campaign_manager.repository.RecipientRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 public class CampaignService {
 
     private final CampaignRepository campaignRepository;
+    private final CampaignChunkRepository campaignChunkRepository;
     private final RecipientRepository recipientRepository;
 
     public CampaignResponse createCampaign(CreateCampaignRequest req) {
@@ -93,6 +96,10 @@ public class CampaignService {
         campaignRepository.save(campaign);
 
         return toResponse(campaign);
+    }
+
+    public List<CampaignChunk> getCampaignChunks(String campaignId) {
+        return campaignChunkRepository.findByCampaignId(campaignId);
     }
 
     // ── internals ────────────────────────────────────────────────────────────
