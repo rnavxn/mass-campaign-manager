@@ -5,8 +5,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface RecipientRepository extends JpaRepository<Recipient, String> {
+
     List<Recipient> findByCampaignId(String campaignId);
+
     int countByCampaignId(String campaignId);
+
     List<Recipient> findByChunkId(String chunkId);
+
 }
 
