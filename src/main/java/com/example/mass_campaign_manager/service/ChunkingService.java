@@ -66,7 +66,7 @@ public class ChunkingService {
 
             // 3. submit job to dist-job-processor (payload = chunkId)
             try {
-                String jobId = jobProcessorClient.enqueueJob(chunkId);
+                String jobId = jobProcessorClient.enqueueChunkJob(chunkId);
                 chunk.setJobId(jobId);
                 campaignChunkRepository.save(chunk);
             } catch (Exception e) {
