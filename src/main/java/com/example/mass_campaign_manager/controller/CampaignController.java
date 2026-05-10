@@ -3,6 +3,7 @@ package com.example.mass_campaign_manager.controller;
 
 import com.example.mass_campaign_manager.dto.CreateCampaignRequest;
 import com.example.mass_campaign_manager.dto.CampaignResponse;
+import com.example.mass_campaign_manager.entity.CampaignChunk;
 import com.example.mass_campaign_manager.service.CampaignService;
 import com.example.mass_campaign_manager.service.ChunkingService;
 import jakarta.validation.Valid;
@@ -54,5 +55,10 @@ public class CampaignController {
     public ResponseEntity<Void> launchCampaign(@PathVariable String id) {
         chunkingService.launchCampaign(id);
         return ResponseEntity.accepted().build();
+    }
+
+    @GetMapping("/{id}/chunks")
+    public ResponseEntity<List<CampaignChunk>> getCampaignChunks(@PathVariable String id) {
+        return ResponseEntity.ok(campaignService.getCampaignChunks(id));
     }
 }
