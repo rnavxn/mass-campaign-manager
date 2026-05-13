@@ -1,43 +1,67 @@
 @import "tailwindcss";
 
-/* 1. Define the actual values based on the mode */
 @layer base {
   :root {
-    --bg-app: var(--color-zinc-50);
-    --bg-card: var(--color-white);
-    --text-main: var(--color-zinc-950);
-    --text-muted: var(--color-zinc-500);
-    --accent-primary: var(--color-violet-600);
-    --accent-hover: var(--color-violet-700);
-    --border-light: var(--color-zinc-200);
+    /* Light Mode (Lavender Tint) */
+    --bg-app: #faf8fc;
+    --bg-surface: #f3f0f7;
+    --text-main: #0f0d12;
+    --text-muted: #6b7280;
+    --border-subtle: #e5e7eb;
+    
+    /* Accents */
+    --accent-primary: #c084fc;
+    --accent-hover: #a855f7;
+    
+    /* Status Colors */
+    --status-running: #c084fc;
+    --status-completed: #16a34a; /* Adjusted for light mode contrast */
+    --status-failed: #dc2626;    /* Adjusted for light mode contrast */
+    --status-draft: #64748b;
+    --status-scheduled: #3b82f6;
   }
 
   .dark {
-    --bg-app: var(--color-zinc-950);
-    --bg-card: var(--color-zinc-900);
-    --text-main: var(--color-zinc-50);
-    --text-muted: var(--color-zinc-400);
-    --accent-primary: var(--color-violet-500); /* Slightly lighter for dark mode contrast */
-    --accent-hover: var(--color-violet-400);
-    --border-light: var(--color-zinc-800);
+    /* Dark Mode (Purple Undertone) */
+    --bg-app: #0f0d12;
+    --bg-surface: #1a1625;
+    --text-main: #faf8fc;
+    --text-muted: #9ca3af;
+    --border-subtle: #2d263b;
+    
+    /* Accents */
+    --accent-primary: #c084fc;
+    --accent-hover: #a855f7;
+    
+    /* Status Colors (As requested) */
+    --status-running: #c084fc;
+    --status-completed: #86efac;
+    --status-failed: #f87171;
+    --status-draft: #94a3b8;
+    --status-scheduled: #93c5fd;
   }
 }
 
-/* 2. Map them into Tailwind v4's theme engine */
 @theme {
   --color-app: var(--bg-app);
-  --color-card: var(--bg-card);
+  --color-surface: var(--bg-surface);
   --color-main: var(--text-main);
   --color-muted: var(--text-muted);
+  --color-border: var(--border-subtle);
+  
   --color-accent: var(--accent-primary);
   --color-accent-hover: var(--accent-hover);
-  --color-divider: var(--border-light);
   
-  /* Custom radius for that sleek SaaS look */
-  --radius-panel: 0.75rem; 
+  --color-running: var(--status-running);
+  --color-completed: var(--status-completed);
+  --color-failed: var(--status-failed);
+  --color-draft: var(--status-draft);
+  --color-scheduled: var(--status-scheduled);
+  
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* 3. Base body styles */
 body {
-  @apply bg-app text-main antialiased transition-colors duration-200;
+  @apply bg-app text-main font-sans antialiased transition-colors duration-200;
 }
