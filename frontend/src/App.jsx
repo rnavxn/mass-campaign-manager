@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { useTheme } from './context/ThemeContext';
 import { Moon, Sun } from 'lucide-react';
 import CampaignList from './pages/CampaignList';
+import CreateCampaign from './pages/CreateCampaign';
+
 
 // The persistent Navbar (Logo left, Theme toggle right)
 function Navbar() {
@@ -32,8 +34,10 @@ export default function App() {
           <Routes>
             {/* Page 1 */}
             <Route path="/" element={<CampaignList />} />
-            
-            {/* Placeholders for our next logical stops */}
+            {/* Page 2 */}
+            <Route path="/create" element={<CreateCampaign />} />
+
+            {/* Placeholders for next logical stops */}
             <Route path="/create" element={<div className="text-muted">Create Page Coming Next...</div>} />
             <Route path="/campaigns/:id" element={<div className="text-muted">Detail Page Coming Next...</div>} />
           </Routes>
