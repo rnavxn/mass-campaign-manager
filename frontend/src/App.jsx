@@ -6,9 +6,9 @@ import CampaignDetail from './pages/CampaignDetail';
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+      <div className="min-h-screen bg-app text-main transition-colors duration-200 font-sans">
         {/* Simple Top Navigation */}
-        <nav className="bg-white shadow-sm px-6 py-4 flex justify-between items-center border-b border-gray-200">
+        <nav className="bg-app shadow-sm px-6 py-4 flex justify-between items-center border-light">
           <Link to="/" className="text-xl font-bold text-blue-600 tracking-tight">
             Mass Campaign Manager
           </Link>

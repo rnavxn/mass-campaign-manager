@@ -1,1 +1,43 @@
 @import "tailwindcss";
+
+/* 1. Define the actual values based on the mode */
+@layer base {
+  :root {
+    --bg-app: var(--color-zinc-50);
+    --bg-card: var(--color-white);
+    --text-main: var(--color-zinc-950);
+    --text-muted: var(--color-zinc-500);
+    --accent-primary: var(--color-violet-600);
+    --accent-hover: var(--color-violet-700);
+    --border-light: var(--color-zinc-200);
+  }
+
+  .dark {
+    --bg-app: var(--color-zinc-950);
+    --bg-card: var(--color-zinc-900);
+    --text-main: var(--color-zinc-50);
+    --text-muted: var(--color-zinc-400);
+    --accent-primary: var(--color-violet-500); /* Slightly lighter for dark mode contrast */
+    --accent-hover: var(--color-violet-400);
+    --border-light: var(--color-zinc-800);
+  }
+}
+
+/* 2. Map them into Tailwind v4's theme engine */
+@theme {
+  --color-app: var(--bg-app);
+  --color-card: var(--bg-card);
+  --color-main: var(--text-main);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent-primary);
+  --color-accent-hover: var(--accent-hover);
+  --color-divider: var(--border-light);
+  
+  /* Custom radius for that sleek SaaS look */
+  --radius-panel: 0.75rem; 
+}
+
+/* 3. Base body styles */
+body {
+  @apply bg-app text-main antialiased transition-colors duration-200;
+}
