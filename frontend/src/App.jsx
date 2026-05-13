@@ -1,28 +1,41 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import CreateCampaign from './pages/CreateCampaign';
-import CampaignDetail from './pages/CampaignDetail';
+import { useTheme } from './context/ThemeContext';
+import { Moon, Sun } from 'lucide-react';
+import CampaignList from './pages/CampaignList';
+
+// The persistent Navbar (Logo left, Theme toggle right)
+function Navbar() {
+  const { isDark, toggleTheme } = useTheme();
+  return (
+    <nav className="bg-surface border-b border-border px-6 py-4 flex justify-between items-center">
+      <Link to="/" className="text-xl font-bold tracking-tight hover:text-accent transition-colors">
+        Mass Campaign Manager
+      </Link>
+      <button
+        onClick={toggleTheme}
+        className="p-2 rounded-full hover:bg-border text-muted hover:text-main transition-colors"
+        title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+      >
+        {isDark ? <Sun size={20} /> : <Moon size={20} />}
+      </button>
+    </nav>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-app text-main transition-colors duration-200 font-sans">
-        {/* Simple Top Navigation */}
-        <nav className="bg-app shadow-sm px-6 py-4 flex justify-between items-center border-light">
-          <Link to="/" className="text-xl font-bold text-blue-600 tracking-tight">
-            Mass Campaign Manager
-          </Link>
-          <Link to="/create" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm">
-            + New Campaign
-          </Link>
-        </nav>
-
-        {/* Page Content Container */}
-        <main className="max-w-6xl mx-auto p-6">
+      {/* We use flex-col to push the main content down and fill the screen */}
+      <div className="min-h-screen bg-app text-main flex flex-col font-sans transition-colors duration-200">
+        <Navbar />
+        <main className="flex-1 p-8 max-w-6xl mx-auto w-full">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/create" element={<CreateCampaign />} />
-            <Route path="/campaigns/:id" element={<CampaignDetail />} />
+            {/* Page 1 */}
+            <Route path="/" element={<CampaignList />} />
+            
+            {/* Placeholders for our next logical stops */}
+            <Route path="/create" element={<div className="text-muted">Create Page Coming Next...</div>} />
+            <Route path="/campaigns/:id" element={<div className="text-muted">Detail Page Coming Next...</div>} />
           </Routes>
         </main>
       </div>
