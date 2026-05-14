@@ -3,6 +3,7 @@ import { useTheme } from './context/ThemeContext';
 import { Sun, Moon, LayoutList, PlusCircle } from 'lucide-react';
 import CampaignList from './pages/CampaignList';
 import CreateCampaign from './pages/CreateCampaign';
+import CampaignDetail from './pages/CampaignDetail';
 
 function Sidebar() {
   const { isDark, toggleTheme } = useTheme();
@@ -59,7 +60,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<CampaignList />} />
             <Route path="/create" element={<CreateCampaign />} />
-            <Route path="/campaigns/:id" element={<div className="text-muted">Coming next…</div>} />
+            <Route path="/campaigns/:id" element={<CampaignDetail />} />
           </Routes>
         </main>
       </div>
