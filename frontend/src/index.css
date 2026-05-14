@@ -1,39 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @layer base {
   :root {
-    /* Light Mode (Lavender Tint) */
     --bg-app: #faf8fc;
     --bg-surface: #f3f0f7;
     --text-main: #0f0d12;
     --text-muted: #6b7280;
-    --border-subtle: #e5e7eb;
-    
-    /* Accents */
+    --border-subtle: #e2dcea;
+
     --accent-primary: #c084fc;
     --accent-hover: #a855f7;
-    
-    /* Status Colors */
-    --status-running: #c084fc;
-    --status-completed: #16a34a; /* Adjusted for light mode contrast */
-    --status-failed: #dc2626;    /* Adjusted for light mode contrast */
+
+    --status-running: #a855f7;
+    --status-completed: #16a34a;
+    --status-failed: #dc2626;
     --status-draft: #64748b;
-    --status-scheduled: #3b82f6;
+    --status-scheduled: #2563eb;
   }
 
   .dark {
-    /* Dark Mode (Purple Undertone) */
     --bg-app: #0f0d12;
     --bg-surface: #1a1625;
-    --text-main: #faf8fc;
-    --text-muted: #9ca3af;
-    --border-subtle: #2d263b;
-    
-    /* Accents */
+    --text-main: #f3f0f7;
+    --text-muted: #9d8faf;
+    --border-subtle: #2d2540;
+
     --accent-primary: #c084fc;
     --accent-hover: #a855f7;
-    
-    /* Status Colors (As requested) */
+
     --status-running: #c084fc;
     --status-completed: #86efac;
     --status-failed: #f87171;
@@ -48,20 +43,39 @@
   --color-main: var(--text-main);
   --color-muted: var(--text-muted);
   --color-border: var(--border-subtle);
-  
+
   --color-accent: var(--accent-primary);
   --color-accent-hover: var(--accent-hover);
-  
+
   --color-running: var(--status-running);
   --color-completed: var(--status-completed);
   --color-failed: var(--status-failed);
   --color-draft: var(--status-draft);
   --color-scheduled: var(--status-scheduled);
-  
+
   --font-sans: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
 body {
-  @apply bg-app text-main font-sans antialiased transition-colors duration-200;
+  @apply bg-app text-main font-sans antialiased;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+
+/* Skeleton pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.skeleton { animation: skeleton-pulse 1.6s ease-in-out infinite; }
+
+/* Running dot pulse */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }

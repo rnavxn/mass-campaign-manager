@@ -4,34 +4,22 @@ const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
-    // Check local storage first
-    const savedTheme = localStorage.getItem('mcm-theme');
-    if (savedTheme) {
-      return savedTheme === 'dark';
-    }
-    // If no saved preference, check system preference
+    const saved = localStorage.getItem('campaignos-theme');
+    if (saved) return saved === 'dark';
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    if (isDark) {
-      root.classList.add('dark');
-      localStorage.setItem('mcm-theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('mcm-theme', 'light');
-    }
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDark);
+    localStorage.setItem('campaignos-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
-  const toggleTheme = () => setIsDark(!isDark);
-
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDark, toggleTheme: () => setIsDark(d => !d) }}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-// Custom hook so we don't have to import useContext everywhere
 export const useTheme = () => useContext(ThemeContext);
