@@ -185,7 +185,7 @@ export default function CampaignList() {
                     </td>
                     <td className="p-4 text-muted font-mono text-xs">{c.channel ?? '—'}</td>
                     <td className="p-4"><StatusBadge status={c.status} /></td>
-                    <td className="p-4"><ProgressBar value={calcProgress(c)} height={5} showLabel /></td>
+                    <td className="p-4"><ProgressBar value={calcProgress(c)} height={5} showLabel status={c.status} /></td>
                     <td className="p-4 font-mono text-xs text-muted">
                       {sent.toLocaleString()} / {(c.totalRecipients ?? 0).toLocaleString()}
                     </td>
