@@ -1,0 +1,62 @@
+version: "3.9"
+ 
+services:
+ 
+  campaign-db:
+    image: postgres:16-alpine
+    container_name: campaign-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - campaign_db_data:/var/lib/postgresql/data
+    networks:
+      - mcm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+ 
+  mass-campaign-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mass-campaign-manager
+    ports:
+      - "8081:8081"
+    environment:
+      POSTGRES_HOST: campaign-db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JOB_PROCESSOR_URL: ${JOB_PROCESSOR_URL}
+      APP_SELF_BASE_URL: ${APP_SELF_BASE_URL}
+    depends_on:
+      campaign-db:
+        condition: service_healthy
+    networks:
+      - mcm-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+ 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mcm-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - mass-campaign-manager
+    networks:
+      - mcm-network
+ 
+networks:
+  mcm-network:
+    driver: bridge
+ 
+volumes:
+  campaign_db_data:
