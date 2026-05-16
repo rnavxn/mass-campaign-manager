@@ -6,15 +6,15 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ProgressBar } from '../components/ProgressBar';
 
 const MOCK = [
-  { id: 'c1', name: 'Black Friday Blast',      channel: 'EMAIL', status: 'RUNNING',   totalRecipients: 10000, successCount: 5800, failureCount: 400,  createdAt: '2026-05-10T10:00:00Z' },
-  { id: 'c2', name: 'Welcome Series',          channel: 'EMAIL', status: 'COMPLETED', totalRecipients: 5000,  successCount: 4900, failureCount: 100,  createdAt: '2026-05-09T14:30:00Z' },
-  { id: 'c3', name: 'Inactive Reactivation',   channel: 'SMS',   status: 'FAILED',    totalRecipients: 3000,  successCount: 600,  failureCount: 60,   createdAt: '2026-05-08T09:15:00Z' },
-  { id: 'c4', name: 'System Migration Notice', channel: 'EMAIL', status: 'DRAFT',     totalRecipients: 3500,  successCount: 0,    failureCount: 0,    createdAt: '2026-05-12T11:00:00Z' },
+  { id: 'c1', name: 'Black Friday Blast',      channel: 'EMAIL', status: 'RUNNING',   totalRecipients: 10000, processedRecipients: 5800, failedRecipients: 400,  createdAt: '2026-05-10T10:00:00Z' },
+  { id: 'c2', name: 'Welcome Series',          channel: 'EMAIL', status: 'COMPLETED', totalRecipients: 5000,  processedRecipients: 4900, failedRecipients: 100,  createdAt: '2026-05-09T14:30:00Z' },
+  { id: 'c3', name: 'Inactive Reactivation',   channel: 'SMS',   status: 'FAILED',    totalRecipients: 3000,  processedRecipients: 600,  failedRecipients: 60,   createdAt: '2026-05-08T09:15:00Z' },
+  { id: 'c4', name: 'System Migration Notice', channel: 'EMAIL', status: 'DRAFT',     totalRecipients: 3500,  processedRecipients: 0,    failedRecipients: 0,    createdAt: '2026-05-12T11:00:00Z' },
 ];
 
 function calcProgress(c) {
   if (!c.totalRecipients) return 0;
-  return ((c.successCount ?? 0) + (c.failureCount ?? 0)) / c.totalRecipients * 100;
+  return ((c.processedRecipients ?? 0) + (c.failedRecipients ?? 0)) / c.totalRecipients * 100;
 }
 
 function fmtDate(iso) {
@@ -187,7 +187,7 @@ export default function CampaignList() {
                     <td className="p-4"><StatusBadge status={c.status} /></td>
                     <td className="p-4"><ProgressBar value={calcProgress(c)} height={5} showLabel status={c.status} /></td>
                     <td className="p-4 font-mono text-xs text-muted">
-                      {sent.toLocaleString()} / {(c.totalRecipients ?? 0).toLocaleString()}
+                      {(c.processedRecipients ?? 0).toLocaleString()} / {(c.totalRecipients ?? 0).toLocaleString()}
                     </td>
                     <td className="p-4 text-muted text-xs">{fmtDate(c.createdAt)}</td>
                     <td className="p-4" onClick={e => e.stopPropagation()}>

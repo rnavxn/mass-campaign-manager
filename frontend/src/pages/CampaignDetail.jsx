@@ -25,7 +25,7 @@ function duration(startMs, endMs) {
 
 function calcProgress(c) {
   if (!c?.totalRecipients) return 0;
-  return ((c.successCount ?? 0) + (c.failureCount ?? 0)) / c.totalRecipients * 100;
+  return ((c.processedRecipients ?? 0) + (c.failedRecipients ?? 0)) / c.totalRecipients * 100;
 }
 
 // --- Stat Card ---
@@ -224,14 +224,14 @@ export default function CampaignDetail() {
         />
         <StatCard
           label="Sent"
-          value={(campaign.successCount ?? 0).toLocaleString()}
-          sub={`${totalSent.toLocaleString()} processed total`}
+          value={(campaign.processedRecipients ?? 0).toLocaleString()}
+          sub={`${((campaign.processedRecipients ?? 0) + (campaign.failedRecipients ?? 0)).toLocaleString()} processed total`}
         />
         <StatCard
           label="Failed"
-          value={(campaign.failureCount ?? 0).toLocaleString()}
-          sub={campaign.failureCount > 0
-            ? `${((campaign.failureCount / totalSent) * 100).toFixed(1)}% failure rate`
+          value={(campaign.failedRecipients ?? 0).toLocaleString()}
+          sub={campaign.failedRecipients > 0
+            ? `${((campaign.failedRecipients / ((campaign.processedRecipients ?? 0) + campaign.failedRecipients)) * 100).toFixed(1)}% failure rate`
             : 'clean'}
         />
         <StatCard
