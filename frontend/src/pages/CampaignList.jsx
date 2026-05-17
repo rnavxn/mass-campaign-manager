@@ -97,6 +97,23 @@ export default function CampaignList() {
 
   useEffect(() => { load(); }, [load]);
 
+
+  const hasRunning = campaigns.some(c => c.status === 'RUNNING');
+
+  useEffect(() => {
+    if (!hasRunning) return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await api.getCampaigns();
+        const list = Array.isArray(data) ? data : (data.campaigns ?? data.content ?? []);
+        setCampaigns(list);
+      } catch {
+        // silent — don't replace mock data or show error during background poll
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hasRunning]);
+
   const stats = {
     total: campaigns.length,
     running: campaigns.filter(c => c.status === 'RUNNING').length,
@@ -146,16 +163,16 @@ export default function CampaignList() {
 
       {/* Table */}
       <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full text-sm border-collapse table-fixed">
           <thead>
             <tr className="border-b border-border text-muted text-xs uppercase tracking-wider font-semibold">
-              <th className="p-4 text-left">Name</th>
-              <th className="p-4 text-left">Channel</th>
-              <th className="p-4 text-left">Status</th>
-              <th className="p-4 text-left w-48">Progress</th>
-              <th className="p-4 text-left">Recipients</th>
-              <th className="p-4 text-left">Created</th>
-              <th className="p-4" />
+              <th className="p-4 text-left w-[220px]">Name</th>
+              <th className="p-4 text-left w-[90px]">Channel</th>
+              <th className="p-4 text-left w-[110px]">Status</th>
+              <th className="p-4 text-left w-[160px]">Progress</th>
+              <th className="p-4 text-left w-[120px]">Recipients</th>
+              <th className="p-4 text-left w-[110px]">Created</th>
+              <th className="p-4 w-[50px]" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -179,9 +196,9 @@ export default function CampaignList() {
                     onClick={() => navigate(`/campaigns/${c.id}`)}
                     className="hover:bg-border/20 cursor-pointer transition-colors group"
                   >
-                    <td className="p-4 font-medium group-hover:text-accent transition-colors">
-                      <div>{c.name}</div>
-                      <div className="text-xs text-muted font-mono mt-0.5">#{c.id}</div>
+                    <td className="p-4 font-medium group-hover:text-accent transition-colors max-w-[100px]">
+                      <div className="truncate">{c.name}</div>
+                      <div className="text-xs text-muted font-mono mt-0.5 truncate">#{c.id}</div>
                     </td>
                     <td className="p-4 text-muted font-mono text-xs">{c.channel ?? '—'}</td>
                     <td className="p-4"><StatusBadge status={c.status} /></td>
