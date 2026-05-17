@@ -34,6 +34,7 @@ function StatPill({ label, value, color }) {
 
 // --- Delete Modal ---
 function DeleteModal({ campaign, onConfirm, onCancel, loading }) {
+  const isDraft = campaign.status === 'DRAFT';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-surface border border-border rounded-xl p-7 w-full max-w-sm shadow-2xl">
@@ -41,18 +42,25 @@ function DeleteModal({ campaign, onConfirm, onCancel, loading }) {
           <AlertCircle size={18} className="text-failed shrink-0" />
           <h3 className="font-semibold text-failed">Delete campaign?</h3>
         </div>
-        <p className="text-sm text-muted mb-6 leading-relaxed">
-          <span className="text-main font-medium">"{campaign.name}"</span> will be permanently deleted. This cannot be undone.
+        <p className="text-sm text-muted mb-2 leading-relaxed">
+          <span className="text-main font-medium">"{campaign.name}"</span> will be permanently deleted.
         </p>
-        <div className="flex gap-2 justify-end">
+        {!isDraft && (
+          <p className="text-xs text-failed bg-failed/10 border border-failed/20 rounded px-3 py-2 mb-4">
+            Only DRAFT campaigns can be deleted. This campaign is {campaign.status}.
+          </p>
+        )}
+        <div className="flex gap-2 justify-end mt-4">
           <button onClick={onCancel} disabled={loading}
             className="px-4 py-2 rounded-md text-sm font-medium text-muted border border-border hover:text-main transition-colors">
             Cancel
           </button>
-          <button onClick={onConfirm} disabled={loading}
-            className="px-4 py-2 rounded-md text-sm font-medium bg-failed/10 text-failed border border-failed/30 hover:bg-failed/20 transition-colors">
-            {loading ? 'Deleting…' : 'Delete'}
-          </button>
+          {isDraft && (
+            <button onClick={onConfirm} disabled={loading}
+              className="px-4 py-2 rounded-md text-sm font-medium bg-failed/10 text-failed border border-failed/30 hover:bg-failed/20 transition-colors">
+              {loading ? 'Deleting…' : 'Delete'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -127,7 +135,10 @@ export default function CampaignList() {
       setCampaigns(prev => prev.filter(c => c.id !== toDelete.id));
       setToDelete(null);
     } catch (err) {
-      setError(err.message);
+      setToDelete(null);
+      setError(err.message.includes('DRAFT')
+        ? 'Only DRAFT campaigns can be deleted.'
+        : err.message);
     } finally {
       setDeleting(false);
     }
