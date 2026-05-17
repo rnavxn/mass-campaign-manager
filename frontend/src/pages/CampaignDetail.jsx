@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Rocket, RefreshCw, FileText, UploadCloud, Trash2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Rocket, RefreshCw, UploadCloud, Trash2 } from 'lucide-react';
 import { api } from '../api/campaigns';
+import { useCampaign } from '../hooks/useCampaign';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProgressBar } from '../components/ProgressBar';
-
-const POLL_INTERVAL = 3000;
+import { StatCard } from '../components/StatCard';
+import { ChunkBadge } from '../components/ChunkBadge';
+import { DeleteModal } from '../components/DeleteModal';
+import { UploadDropzone } from '../components/UploadDropzone';
 
 function fmtEpoch(ms) {
   if (!ms) return '—';
@@ -28,34 +31,6 @@ function calcProgress(c) {
   return ((c.processedRecipients ?? 0) + (c.failedRecipients ?? 0)) / c.totalRecipients * 100;
 }
 
-// --- Stat Card ---
-function StatCard({ label, value, sub }) {
-  return (
-    <div className="bg-surface border border-border rounded-lg px-5 py-4 flex-1 min-w-0">
-      <p className="text-xs text-muted uppercase tracking-wider font-semibold mb-1">{label}</p>
-      <p className="font-mono text-2xl font-bold tracking-tight">{value}</p>
-      {sub && <p className="text-xs text-muted mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-// --- Chunk status badge (reuse same CSS vars, smaller) ---
-const CHUNK_STATUS_STYLES = {
-  PENDING:    'text-draft border-draft/30 bg-draft/10',
-  PROCESSING: 'text-running border-running/30 bg-running/10',
-  COMPLETED:  'text-completed border-completed/30 bg-completed/10',
-  FAILED:     'text-failed border-failed/30 bg-failed/10',
-};
-
-function ChunkBadge({ status }) {
-  return (
-    <span className={`font-mono text-[10px] font-medium px-2 py-0.5 rounded border ${CHUNK_STATUS_STYLES[status] ?? CHUNK_STATUS_STYLES.PENDING}`}>
-      {status}
-    </span>
-  );
-}
-
-// --- Skeleton ---
 function SkeletonDetail() {
   return (
     <div className="space-y-6 animate-pulse">
@@ -70,7 +45,7 @@ function SkeletonDetail() {
       </div>
       <div className="h-3 bg-border rounded w-full" />
       <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        {[...Array(5)].map((_, i) => (
+        {[...Array(4)].map((_, i) => (
           <div key={i} className="flex gap-6 p-4 border-b border-border last:border-0">
             {[...Array(6)].map((_, j) => (
               <div key={j} className="h-3 bg-border rounded flex-1" />
@@ -82,72 +57,28 @@ function SkeletonDetail() {
   );
 }
 
-// --- Main ---
 export default function CampaignDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  const [campaign, setCampaign] = useState(null);
-  const [chunks, setChunks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [launching, setLaunching] = useState(false);
+  const { campaign, chunks, loading, error, refresh, setCampaign } = useCampaign(id);
 
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-
+  const [launching, setLaunching] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  const pollRef = useRef(null);
-
-  const fetchAll = useCallback(async () => {
-    try {
-      const [camp, chunkData] = await Promise.all([
-        api.getCampaign(id),
-        api.getChunks(id),
-      ]);
-      setCampaign(camp);
-      const list = Array.isArray(chunkData) ? chunkData : (chunkData.chunks ?? chunkData.content ?? []);
-      setChunks(list);
-      return camp;
-    } catch (err) {
-      setError(err.message);
-      return null;
-    }
-  }, [id]);
-
-  // Initial load
-  useEffect(() => {
-    fetchAll().finally(() => setLoading(false));
-  }, [fetchAll]);
-
-  // Polling — only while RUNNING
-  useEffect(() => {
-    if (!campaign) return;
-
-    if (campaign.status === 'RUNNING') {
-      pollRef.current = setInterval(async () => {
-        const updated = await fetchAll();
-        if (updated && updated.status !== 'RUNNING') {
-          clearInterval(pollRef.current);
-        }
-      }, POLL_INTERVAL);
-    }
-
-    return () => clearInterval(pollRef.current);
-  }, [campaign?.status, fetchAll]);
+  const [actionError, setActionError] = useState(null);
 
   const handleUpload = async () => {
     if (!file) return;
     setUploading(true);
-    setError(null);
+    setActionError(null);
     try {
       const data = await api.uploadRecipients(id, file);
       setCampaign(prev => ({ ...prev, totalRecipients: data.totalRecipients }));
       setFile(null);
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     } finally {
       setUploading(false);
     }
@@ -155,15 +86,12 @@ export default function CampaignDetail() {
 
   const handleLaunch = async () => {
     setLaunching(true);
-    setError(null);
+    setActionError(null);
     try {
       await api.launchCampaign(id);
-      const updated = await fetchAll();
-      if (updated?.status === 'RUNNING') {
-        // polling effect will kick in on next render
-      }
+      await refresh();
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     } finally {
       setLaunching(false);
     }
@@ -175,7 +103,7 @@ export default function CampaignDetail() {
       await api.deleteCampaign(id);
       navigate('/');
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
       setShowDelete(false);
     } finally {
       setDeleting(false);
@@ -198,6 +126,7 @@ export default function CampaignDetail() {
   }
 
   const progress = calcProgress(campaign);
+  const totalSent = (campaign.processedRecipients ?? 0) + (campaign.failedRecipients ?? 0);
 
   return (
     <div className="space-y-6">
@@ -219,51 +148,50 @@ export default function CampaignDetail() {
           </div>
         </div>
 
-        {/* Actions */}
-        {campaign.status === 'FAILED' && (
-          <button
-            onClick={handleLaunch}
-            disabled={launching}
-            className="flex items-center gap-2 bg-surface border border-border hover:border-accent text-muted hover:text-accent text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-50 shrink-0"
-          >
-            <RefreshCw size={15} />
-            {launching ? 'Retrying…' : 'Re-run'}
-          </button>
-        )}
-        {campaign.status === 'DRAFT' && (
-          <button
-            onClick={() => setShowDelete(true)}
-            className="flex items-center gap-2 bg-surface border border-border hover:border-failed text-muted hover:text-failed text-sm font-medium px-4 py-2 rounded-md transition-colors shrink-0"
-          >
-            <Trash2 size={15} />
-            Delete
-          </button>
-        )}
+        {/* Header actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          {campaign.status === 'DRAFT' && (
+            <button
+              onClick={() => setShowDelete(true)}
+              className="flex items-center gap-2 bg-surface border border-border hover:border-failed text-muted hover:text-failed text-sm font-medium px-4 py-2 rounded-md transition-colors"
+            >
+              <Trash2 size={15} /> Delete
+            </button>
+          )}
+          {campaign.status === 'FAILED' && (
+            <button
+              onClick={handleLaunch}
+              disabled={launching}
+              className="flex items-center gap-2 bg-surface border border-border hover:border-accent text-muted hover:text-accent text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={15} />
+              {launching ? 'Retrying…' : 'Re-run'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Error banner (non-fatal) */}
-      {error && (
-        <div className="bg-failed/10 border border-failed/30 text-failed text-sm px-4 py-3 rounded-md">
-          {error}
+      {/* Action error */}
+      {actionError && (
+        <div className="bg-failed/10 border border-failed/30 text-failed text-sm px-4 py-3 rounded-md flex justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="underline hover:no-underline">Dismiss</button>
         </div>
       )}
 
       {/* Stat row */}
       <div className="flex gap-4">
-        <StatCard
-          label="Total Recipients"
-          value={(campaign.totalRecipients ?? 0).toLocaleString()}
-        />
+        <StatCard label="Total Recipients" value={(campaign.totalRecipients ?? 0).toLocaleString()} />
         <StatCard
           label="Sent"
           value={(campaign.processedRecipients ?? 0).toLocaleString()}
-          sub={`${((campaign.processedRecipients ?? 0) + (campaign.failedRecipients ?? 0)).toLocaleString()} processed total`}
+          sub={`${totalSent.toLocaleString()} processed total`}
         />
         <StatCard
           label="Failed"
           value={(campaign.failedRecipients ?? 0).toLocaleString()}
           sub={campaign.failedRecipients > 0
-            ? `${((campaign.failedRecipients / ((campaign.processedRecipients ?? 0) + campaign.failedRecipients)) * 100).toFixed(1)}% failure rate`
+            ? `${((campaign.failedRecipients / totalSent) * 100).toFixed(1)}% failure rate`
             : 'clean'}
         />
         <StatCard
@@ -276,60 +204,38 @@ export default function CampaignDetail() {
       {/* Progress bar */}
       <ProgressBar value={progress} height={6} status={campaign.status} />
 
-      {/* Draft */}
+      {/* DRAFT — upload + launch */}
       {campaign.status === 'DRAFT' && (
-        <div className="bg-surface border border-border rounded-lg p-5">
-          <h2 className="text-sm font-semibold mb-1">Recipients</h2>
-          <p className="text-xs text-muted mb-4">
-            {campaign.totalRecipients > 0
-              ? `${campaign.totalRecipients.toLocaleString()} recipients loaded. Upload a new CSV to replace.`
-              : 'No recipients yet. Upload a CSV to continue.'}
-          </p>
-
-          <label className="relative border-2 border-dashed border-border hover:border-accent hover:bg-accent/5 transition-colors rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer group mb-4">
-            <input
-              type="file" accept=".csv"
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              onChange={e => { setFile(e.target.files[0]); setError(null); }}
-            />
-            {file ? (
-              <>
-                <FileText className="text-accent mb-2" size={28} />
-                <p className="text-sm font-medium">{file.name}</p>
-                <p className="text-xs text-muted mt-1">{(file.size / 1024).toFixed(1)} KB</p>
-              </>
-            ) : (
-              <>
-                <UploadCloud className="text-muted group-hover:text-accent transition-colors mb-2" size={28} />
-                <p className="text-sm font-medium">Click or drag CSV here</p>
-                <p className="text-xs text-muted mt-1">contact, name columns required</p>
-              </>
-            )}
-          </label>
-
-          <div className="flex items-center justify-between">
+        <div className="bg-surface border border-border rounded-lg p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold mb-1">Recipients</h2>
             <p className="text-xs text-muted">
-              {campaign.totalRecipients > 0 && !file && 'Ready to launch.'}
+              {campaign.totalRecipients > 0
+                ? `${campaign.totalRecipients.toLocaleString()} recipients loaded. Upload a new CSV to replace.`
+                : 'No recipients yet. Upload a CSV to continue.'}
             </p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleUpload}
-                disabled={!file || uploading}
-                className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-md border border-border hover:border-accent text-muted hover:text-accent transition-colors disabled:opacity-40"
-              >
-                <UploadCloud size={14} />
-                {uploading ? 'Uploading…' : 'Upload'}
-              </button>
-              <button
-                onClick={handleLaunch}
-                disabled={launching || campaign.totalRecipients === 0}
-                className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-40"
-                title={campaign.totalRecipients === 0 ? 'Upload recipients first' : ''}
-              >
-                <Rocket size={14} />
-                {launching ? 'Launching…' : 'Launch'}
-              </button>
-            </div>
+          </div>
+
+          <UploadDropzone file={file} onChange={f => { setFile(f); setActionError(null); }} />
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={handleUpload}
+              disabled={!file || uploading}
+              className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-md border border-border hover:border-accent text-muted hover:text-accent transition-colors disabled:opacity-40"
+            >
+              <UploadCloud size={14} />
+              {uploading ? 'Uploading…' : 'Upload'}
+            </button>
+            <button
+              onClick={handleLaunch}
+              disabled={launching || campaign.totalRecipients === 0}
+              title={campaign.totalRecipients === 0 ? 'Upload recipients first' : ''}
+              className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-40"
+            >
+              <Rocket size={14} />
+              {launching ? 'Launching…' : 'Launch'}
+            </button>
           </div>
         </div>
       )}
@@ -340,7 +246,6 @@ export default function CampaignDetail() {
           Execution Chunks
           <span className="ml-2 font-mono font-normal normal-case text-xs">({chunks.length})</span>
         </h2>
-
         <div className="bg-surface border border-border rounded-lg overflow-hidden">
           {chunks.length === 0 ? (
             <p className="text-sm text-muted p-8 text-center">
@@ -385,29 +290,14 @@ export default function CampaignDetail() {
       </div>
 
       {showDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-surface border border-border rounded-xl p-7 w-full max-w-sm shadow-2xl">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle size={18} className="text-failed shrink-0" />
-              <h3 className="font-semibold text-failed">Delete campaign?</h3>
-            </div>
-            <p className="text-sm text-muted mb-6 leading-relaxed">
-              <span className="text-main font-medium">"{campaign.name}"</span> will be permanently deleted. This cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowDelete(false)} disabled={deleting}
-                className="px-4 py-2 rounded-md text-sm font-medium text-muted border border-border hover:text-main transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="px-4 py-2 rounded-md text-sm font-medium bg-failed/10 text-failed border border-failed/30 hover:bg-failed/20 transition-colors">
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteModal
+          name={campaign.name}
+          status={campaign.status}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDelete(false)}
+          loading={deleting}
+        />
       )}
-
     </div>
   );
 }

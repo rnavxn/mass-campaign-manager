@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, UploadCloud, FileText, Rocket, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Rocket, CheckCircle2 } from 'lucide-react';
 import { api } from '../api/campaigns';
+import { UploadDropzone } from '../components/UploadDropzone';
 
 const STEPS = ['Details', 'Recipients', 'Launch'];
 
@@ -187,26 +188,7 @@ export default function CreateCampaign() {
             </p>
           </div>
 
-          <label className="relative border-2 border-dashed border-border hover:border-accent hover:bg-accent/5 transition-colors rounded-lg p-12 flex flex-col items-center justify-center cursor-pointer group">
-            <input
-              type="file" accept=".csv"
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              onChange={e => { setFile(e.target.files[0]); setError(null); }}
-            />
-            {file ? (
-              <>
-                <FileText className="text-accent mb-3" size={36} />
-                <p className="font-medium text-sm">{file.name}</p>
-                <p className="text-xs text-muted mt-1">{(file.size / 1024).toFixed(1)} KB</p>
-              </>
-            ) : (
-              <>
-                <UploadCloud className="text-muted group-hover:text-accent transition-colors mb-3" size={36} />
-                <p className="font-medium text-sm">Click or drag CSV here</p>
-                <p className="text-xs text-muted mt-1">Only .csv files accepted</p>
-              </>
-            )}
-          </label>
+          <UploadDropzone file={file} onChange={f => { setFile(f); setError(null); }} />
 
           <div className="flex justify-between border-t border-border pt-4">
             <button onClick={() => setStep(1)}
