@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Rocket, RefreshCw, FileText, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Rocket, RefreshCw, FileText, UploadCloud, Trash2, AlertCircle } from 'lucide-react';
 import { api } from '../api/campaigns';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProgressBar } from '../components/ProgressBar';
@@ -96,6 +96,9 @@ export default function CampaignDetail() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const pollRef = useRef(null);
 
   const fetchAll = useCallback(async () => {
@@ -166,6 +169,19 @@ export default function CampaignDetail() {
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteCampaign(id);
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+      setShowDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <SkeletonDetail />;
 
   if (error && !campaign) {
@@ -212,6 +228,15 @@ export default function CampaignDetail() {
           >
             <RefreshCw size={15} />
             {launching ? 'Retrying…' : 'Re-run'}
+          </button>
+        )}
+        {campaign.status === 'DRAFT' && (
+          <button
+            onClick={() => setShowDelete(true)}
+            className="flex items-center gap-2 bg-surface border border-border hover:border-failed text-muted hover:text-failed text-sm font-medium px-4 py-2 rounded-md transition-colors shrink-0"
+          >
+            <Trash2 size={15} />
+            Delete
           </button>
         )}
       </div>
@@ -307,7 +332,7 @@ export default function CampaignDetail() {
             </div>
           </div>
         </div>
-)}
+      )}
 
       {/* Chunks table */}
       <div>
@@ -358,6 +383,30 @@ export default function CampaignDetail() {
           )}
         </div>
       </div>
+
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface border border-border rounded-xl p-7 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle size={18} className="text-failed shrink-0" />
+              <h3 className="font-semibold text-failed">Delete campaign?</h3>
+            </div>
+            <p className="text-sm text-muted mb-6 leading-relaxed">
+              <span className="text-main font-medium">"{campaign.name}"</span> will be permanently deleted. This cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowDelete(false)} disabled={deleting}
+                className="px-4 py-2 rounded-md text-sm font-medium text-muted border border-border hover:text-main transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="px-4 py-2 rounded-md text-sm font-medium bg-failed/10 text-failed border border-failed/30 hover:bg-failed/20 transition-colors">
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
