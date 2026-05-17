@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Rocket, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Rocket, RefreshCw, FileText, UploadCloud } from 'lucide-react';
 import { api } from '../api/campaigns';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProgressBar } from '../components/ProgressBar';
@@ -93,6 +93,9 @@ export default function CampaignDetail() {
   const [error, setError] = useState(null);
   const [launching, setLaunching] = useState(false);
 
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
   const pollRef = useRef(null);
 
   const fetchAll = useCallback(async () => {
@@ -132,6 +135,21 @@ export default function CampaignDetail() {
     return () => clearInterval(pollRef.current);
   }, [campaign?.status, fetchAll]);
 
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const data = await api.uploadRecipients(id, file);
+      setCampaign(prev => ({ ...prev, totalRecipients: data.totalRecipients }));
+      setFile(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleLaunch = async () => {
     setLaunching(true);
     setError(null);
@@ -164,7 +182,6 @@ export default function CampaignDetail() {
   }
 
   const progress = calcProgress(campaign);
-  const totalSent = (campaign.successCount ?? 0) + (campaign.failureCount ?? 0);
 
   return (
     <div className="space-y-6">
@@ -187,16 +204,6 @@ export default function CampaignDetail() {
         </div>
 
         {/* Actions */}
-        {campaign.status === 'DRAFT' && (
-          <button
-            onClick={handleLaunch}
-            disabled={launching}
-            className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-50 shrink-0"
-          >
-            <Rocket size={15} />
-            {launching ? 'Launching…' : 'Launch'}
-          </button>
-        )}
         {campaign.status === 'FAILED' && (
           <button
             onClick={handleLaunch}
@@ -243,6 +250,64 @@ export default function CampaignDetail() {
 
       {/* Progress bar */}
       <ProgressBar value={progress} height={6} status={campaign.status} />
+
+      {/* Draft */}
+      {campaign.status === 'DRAFT' && (
+        <div className="bg-surface border border-border rounded-lg p-5">
+          <h2 className="text-sm font-semibold mb-1">Recipients</h2>
+          <p className="text-xs text-muted mb-4">
+            {campaign.totalRecipients > 0
+              ? `${campaign.totalRecipients.toLocaleString()} recipients loaded. Upload a new CSV to replace.`
+              : 'No recipients yet. Upload a CSV to continue.'}
+          </p>
+
+          <label className="relative border-2 border-dashed border-border hover:border-accent hover:bg-accent/5 transition-colors rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer group mb-4">
+            <input
+              type="file" accept=".csv"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              onChange={e => { setFile(e.target.files[0]); setError(null); }}
+            />
+            {file ? (
+              <>
+                <FileText className="text-accent mb-2" size={28} />
+                <p className="text-sm font-medium">{file.name}</p>
+                <p className="text-xs text-muted mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+              </>
+            ) : (
+              <>
+                <UploadCloud className="text-muted group-hover:text-accent transition-colors mb-2" size={28} />
+                <p className="text-sm font-medium">Click or drag CSV here</p>
+                <p className="text-xs text-muted mt-1">contact, name columns required</p>
+              </>
+            )}
+          </label>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted">
+              {campaign.totalRecipients > 0 && !file && 'Ready to launch.'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleUpload}
+                disabled={!file || uploading}
+                className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-md border border-border hover:border-accent text-muted hover:text-accent transition-colors disabled:opacity-40"
+              >
+                <UploadCloud size={14} />
+                {uploading ? 'Uploading…' : 'Upload'}
+              </button>
+              <button
+                onClick={handleLaunch}
+                disabled={launching || campaign.totalRecipients === 0}
+                className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-40"
+                title={campaign.totalRecipients === 0 ? 'Upload recipients first' : ''}
+              >
+                <Rocket size={14} />
+                {launching ? 'Launching…' : 'Launch'}
+              </button>
+            </div>
+          </div>
+        </div>
+)}
 
       {/* Chunks table */}
       <div>
