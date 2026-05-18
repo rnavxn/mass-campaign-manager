@@ -19,8 +19,9 @@ export function useCampaigns() {
     try {
       const data = await api.getCampaigns();
       const list = Array.isArray(data) ? data : (data.campaigns ?? data.content ?? []);
-      setCampaigns(list);
-      return list;
+      const sorted = list.slice().sort((a, b) => b.createdAt - a.createdAt);
+      setCampaigns(sorted);
+      return sorted;
     } catch {
       setCampaigns(MOCK);
       return MOCK;
@@ -34,8 +35,9 @@ export function useCampaigns() {
     try {
       const data = await api.getCampaigns();
       const list = Array.isArray(data) ? data : (data.campaigns ?? data.content ?? []);
-      setCampaigns(list);
-      return list;
+      const sorted = list.slice().sort((a, b) => b.createdAt - a.createdAt);
+      setCampaigns(sorted);
+      return sorted;
     } catch {
       // silent during background poll
     }
