@@ -1,4 +1,3 @@
-
 package com.example.mass_campaign_manager.service;
 
 import com.example.mass_campaign_manager.client.JobProcessorClient;
@@ -13,11 +12,11 @@ import com.example.mass_campaign_manager.repository.RecipientRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -29,7 +28,6 @@ public class ChunkingService {
     private final RecipientRepository recipientRepository;
     private final JobProcessorClient jobProcessorClient;
 
-    @Transactional
     public void launchCampaign(String campaignId) {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
@@ -38,13 +36,42 @@ public class ChunkingService {
             throw new RuntimeException("Only DRAFT campaigns can be launched. Current status: " + campaign.getStatus());
         }
 
-        List<Recipient> recipients = recipientRepository.findByCampaignId(campaignId);
-        if (recipients.isEmpty()) {
-            throw new RuntimeException("Campaign has no recipients. Upload a CSV first.");
+        // 1. Check if it's scheduled for the future
+        boolean isScheduled = campaign.getScheduledAt() != null
+                && campaign.getScheduledAt() > System.currentTimeMillis();
+
+        // 2. INSTANTLY flip status and save to database
+        campaign.setStatus(isScheduled ? CampaignStatus.SCHEDULED : CampaignStatus.RUNNING);
+        campaignRepository.save(campaign);
+        log.info("Campaign {} set to {}", campaignId, campaign.getStatus());
+
+        // 3. If scheduled, STOP here. (Fixes the Ghost Scheduling bug)
+        if (isScheduled) {
+            log.info("Campaign {} is scheduled for future. Skipping chunk generation.", campaignId);
+            return; 
         }
 
-        List<List<Recipient>> batches = partition(recipients, campaign.getChunkSize());
-        log.info("Launching campaign {} — {} recipients → {} chunks", campaignId, recipients.size(), batches.size());
+        // 4. FIRE AND FORGET: Spin up a background thread for the heavy lifting
+        CompletableFuture.runAsync(() -> {
+            try {
+                processChunksInBackground(campaignId, campaign.getChunkSize());
+            } catch (Exception e) {
+                log.error("Fatal error processing chunks for campaign {}", campaignId, e);
+            }
+        });
+    }
+    // ── internals ────────────────────────────────────────────────────────────
+
+    private void processChunksInBackground(String campaignId, int chunkSize) {
+        // Re-fetch recipients in the background thread
+        List<Recipient> recipients = recipientRepository.findByCampaignId(campaignId);
+        if (recipients.isEmpty()) {
+            log.warn("Campaign {} has no recipients to process.", campaignId);
+            return;
+        }
+
+        List<List<Recipient>> batches = partition(recipients, chunkSize);
+        log.info("Background Worker started for {} — {} recipients → {} chunks", campaignId, recipients.size(), batches.size());
 
         int successfulEnqueues = 0;
         int consecutiveFailures = 0;
@@ -53,7 +80,6 @@ public class ChunkingService {
             List<Recipient> batch = batches.get(i);
             String chunkId = UUID.randomUUID().toString();
 
-            // 1. persist the chunk row
             CampaignChunk chunk = CampaignChunk.builder()
                     .id(chunkId)
                     .campaignId(campaignId)
@@ -63,50 +89,39 @@ public class ChunkingService {
                     .build();
             campaignChunkRepository.save(chunk);
 
-            // 2. assign chunkId back to recipients
             batch.forEach(r -> r.setChunkId(chunkId));
             recipientRepository.saveAll(batch);
 
-            // 3. submit job to dist-job-processor (payload = chunkId)
             try {
                 String jobId = jobProcessorClient.enqueueChunkJob(chunkId);
                 chunk.setJobId(jobId);
                 campaignChunkRepository.save(chunk);
+                
                 successfulEnqueues++;
-                consecutiveFailures = 0;
+                consecutiveFailures = 0; // Reset circuit breaker
             } catch (Exception e) {
-                // if enqueue fails for a chunk, mark it failed and continue
-                // campaign still launches — failed chunks are visible in DB
                 log.error("Failed to enqueue chunk {} (index {}): {}", chunkId, i, e.getMessage());
                 chunk.setStatus(ChunkStatus.FAILED);
                 campaignChunkRepository.save(chunk);
-
+                
                 consecutiveFailures++;
-
-                // A CIRCUIT BREAKER
                 if (consecutiveFailures >= 3) {
-                    log.error("Worker seems unresponsive (3 consecutive failures). Aborting remaining {} chunks.", batches.size() - (i + 1));
-                    break;
+                    log.error("Worker unresponsive (3 consecutive fails). Aborting campaign {}.", campaignId);
+                    break; // Trip the circuit breaker!
                 }
             }
         }
 
-        // 4. flip campaign status
+        // If the circuit breaker tripped on the very first chunks, mark campaign as FAILED
         if (successfulEnqueues == 0) {
-            log.error("Zero chunks enqueued for campaign {}. Failing instantly.", campaignId);
-            campaign.setStatus(CampaignStatus.FAILED);
-            campaign.setCompletedAt(System.currentTimeMillis());
-        } else {
-            boolean isScheduled = campaign.getScheduledAt() != null
-                                && campaign.getScheduledAt() > System.currentTimeMillis();
-            campaign.setStatus(isScheduled ? CampaignStatus.SCHEDULED : CampaignStatus.RUNNING);
+            log.error("Zero chunks enqueued. Failing campaign {} instantly.", campaignId);
+            // Re-fetch campaign to avoid detached entity state in the async thread
+            Campaign failedCampaign = campaignRepository.findById(campaignId).orElseThrow();
+            failedCampaign.setStatus(CampaignStatus.FAILED);
+            failedCampaign.setCompletedAt(System.currentTimeMillis());
+            campaignRepository.save(failedCampaign);
         }
-
-        campaignRepository.save(campaign);
-        log.info("Campaign {} launched with status {}", campaignId, campaign.getStatus());
     }
-
-    // ── internals ────────────────────────────────────────────────────────────
 
     private <T> List<List<T>> partition(List<T> list, int size) {
         List<List<T>> partitions = new ArrayList<>();
