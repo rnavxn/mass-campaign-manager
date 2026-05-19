@@ -5,7 +5,6 @@ import com.example.mass_campaign_manager.entity.CampaignChunk;
 import com.example.mass_campaign_manager.entity.Recipient;
 import com.example.mass_campaign_manager.enums.ChunkStatus;
 import com.example.mass_campaign_manager.enums.RecipientStatus;
-import com.example.mass_campaign_manager.event.CampaignCompletionEvent;
 import com.example.mass_campaign_manager.repository.CampaignChunkRepository;
 import com.example.mass_campaign_manager.repository.CampaignRepository;
 import com.example.mass_campaign_manager.repository.RecipientRepository;
@@ -26,8 +25,7 @@ public class NotificationService {
     private final CampaignChunkRepository campaignChunkRepository;
     private final CampaignRepository campaignRepository;
     private final RecipientRepository recipientRepository;
-
-    private final ApplicationEventPublisher eventPublisher;
+    private final CampaignAggregationService campaignAggregationService;
     
     @Transactional
     public void processChunk(String jobId, String chunkId) {
@@ -78,8 +76,8 @@ public class NotificationService {
         campaignChunkRepository.save(chunk);
  
         log.info("Chunk {} done — {} sent, {} failed", chunkId, processed, failed);
-        
-        eventPublisher.publishEvent(new CampaignCompletionEvent(chunk.getCampaignId()));
+
+        campaignAggregationService.aggregate(chunk.getCampaignId());
     }
  
     // ── internals ────────────────────────────────────────────────────────────
