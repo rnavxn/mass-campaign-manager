@@ -46,6 +46,9 @@ public class ChunkingService {
         List<List<Recipient>> batches = partition(recipients, campaign.getChunkSize());
         log.info("Launching campaign {} — {} recipients → {} chunks", campaignId, recipients.size(), batches.size());
 
+        int successfulEnqueues = 0;
+        int consecutiveFailures = 0;
+
         for (int i = 0; i < batches.size(); i++) {
             List<Recipient> batch = batches.get(i);
             String chunkId = UUID.randomUUID().toString();
@@ -69,22 +72,37 @@ public class ChunkingService {
                 String jobId = jobProcessorClient.enqueueChunkJob(chunkId);
                 chunk.setJobId(jobId);
                 campaignChunkRepository.save(chunk);
+                successfulEnqueues++;
+                consecutiveFailures = 0;
             } catch (Exception e) {
                 // if enqueue fails for a chunk, mark it failed and continue
                 // campaign still launches — failed chunks are visible in DB
                 log.error("Failed to enqueue chunk {} (index {}): {}", chunkId, i, e.getMessage());
                 chunk.setStatus(ChunkStatus.FAILED);
                 campaignChunkRepository.save(chunk);
+
+                consecutiveFailures++;
+
+                // A CIRCUIT BREAKER
+                if (consecutiveFailures >= 3) {
+                    log.error("Worker seems unresponsive (3 consecutive failures). Aborting remaining {} chunks.", batches.size() - (i + 1));
+                    break;
+                }
             }
         }
 
         // 4. flip campaign status
-        boolean isScheduled = campaign.getScheduledAt() != null
-                && campaign.getScheduledAt() > System.currentTimeMillis();
+        if (successfulEnqueues == 0) {
+            log.error("Zero chunks enqueued for campaign {}. Failing instantly.", campaignId);
+            campaign.setStatus(CampaignStatus.FAILED);
+            campaign.setCompletedAt(System.currentTimeMillis());
+        } else {
+            boolean isScheduled = campaign.getScheduledAt() != null
+                                && campaign.getScheduledAt() > System.currentTimeMillis();
+            campaign.setStatus(isScheduled ? CampaignStatus.SCHEDULED : CampaignStatus.RUNNING);
+        }
 
-        campaign.setStatus(isScheduled ? CampaignStatus.SCHEDULED : CampaignStatus.RUNNING);
         campaignRepository.save(campaign);
-
         log.info("Campaign {} launched with status {}", campaignId, campaign.getStatus());
     }
 
