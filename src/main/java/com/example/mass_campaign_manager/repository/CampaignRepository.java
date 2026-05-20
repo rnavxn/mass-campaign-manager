@@ -1,9 +1,11 @@
 package com.example.mass_campaign_manager.repository;
 
 import com.example.mass_campaign_manager.entity.Campaign;
+import com.example.mass_campaign_manager.enums.CampaignStatus;
 
 import jakarta.persistence.LockModeType;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,6 +19,8 @@ public interface CampaignRepository extends JpaRepository<Campaign, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM Campaign c WHERE c.id = :id")
     Optional<Campaign> findByIdForUpdate(@Param("id") String id);
+
+    List<Campaign> findByStatusAndScheduledAtLessThanEqual(CampaignStatus status, Long currentTime);
     
 }
 

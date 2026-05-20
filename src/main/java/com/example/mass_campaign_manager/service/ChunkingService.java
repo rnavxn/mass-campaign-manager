@@ -32,11 +32,14 @@ public class ChunkingService {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
 
-        if (campaign.getStatus() != CampaignStatus.DRAFT) {
-            throw new RuntimeException("Only DRAFT campaigns can be launched. Current status: " + campaign.getStatus());
+        if (campaign.getStatus() != CampaignStatus.DRAFT && 
+            campaign.getStatus() != CampaignStatus.FAILED &&
+            campaign.getStatus() != CampaignStatus.SCHEDULED) {
+            throw new RuntimeException("Only DRAFT, FAILED, or SCHEDULED campaigns can be launched. Current status: " + campaign.getStatus());
         }
 
-        // 1. Check if it's scheduled for the future
+        // 1. EVALUATE STATE BEFORE CHANGING IT
+        boolean isRetry = (campaign.getStatus() == CampaignStatus.FAILED);
         boolean isScheduled = campaign.getScheduledAt() != null
                 && campaign.getScheduledAt() > System.currentTimeMillis();
 
@@ -54,12 +57,17 @@ public class ChunkingService {
         // 4. FIRE AND FORGET: Spin up a background thread for the heavy lifting
         CompletableFuture.runAsync(() -> {
             try {
-                processChunksInBackground(campaignId, campaign.getChunkSize());
+                if (isRetry) {
+                    retryFailedChunksInBackground(campaignId);
+                } else {
+                    processChunksInBackground(campaignId, campaign.getChunkSize());
+                }
             } catch (Exception e) {
                 log.error("Fatal error processing chunks for campaign {}", campaignId, e);
             }
         });
     }
+    
     // ── internals ────────────────────────────────────────────────────────────
 
     private void processChunksInBackground(String campaignId, int chunkSize) {
@@ -99,6 +107,7 @@ public class ChunkingService {
                 
                 successfulEnqueues++;
                 consecutiveFailures = 0; // Reset circuit breaker
+
             } catch (Exception e) {
                 log.error("Failed to enqueue chunk {} (index {}): {}", chunkId, i, e.getMessage());
                 chunk.setStatus(ChunkStatus.FAILED);
@@ -106,8 +115,33 @@ public class ChunkingService {
                 
                 consecutiveFailures++;
                 if (consecutiveFailures >= 3) {
-                    log.error("Worker unresponsive (3 consecutive fails). Aborting campaign {}.", campaignId);
-                    break; // Trip the circuit breaker!
+                    log.error("Worker unresponsive (3 fails). Aborting and failing remaining chunks.");
+                    
+                    // SAVE ALL REMAINING BATCHES AS FAILED CHUNKS
+                    for (int j = i + 1; j < batches.size(); j++) {
+                        List<Recipient> skippedBatch = batches.get(j);
+                        String skippedChunkId = UUID.randomUUID().toString();
+
+                        CampaignChunk skippedChunk = CampaignChunk.builder()
+                                .id(skippedChunkId)
+                                .campaignId(campaignId)
+                                .chunkIndex(j)
+                                .status(ChunkStatus.FAILED) // Mark as failed instantly
+                                .createdAt(System.currentTimeMillis())
+                                .build();
+                        campaignChunkRepository.save(skippedChunk);
+
+                        skippedBatch.forEach(r -> r.setChunkId(skippedChunkId));
+                        recipientRepository.saveAll(skippedBatch);
+                    }
+                    
+                    // Force the Campaign itself to FAILED
+                    Campaign failedCampaign = campaignRepository.findById(campaignId).orElseThrow();
+                    failedCampaign.setStatus(CampaignStatus.FAILED);
+                    failedCampaign.setCompletedAt(System.currentTimeMillis());
+                    campaignRepository.save(failedCampaign);
+
+                    break;
                 }
             }
         }
@@ -116,6 +150,54 @@ public class ChunkingService {
         if (successfulEnqueues == 0) {
             log.error("Zero chunks enqueued. Failing campaign {} instantly.", campaignId);
             // Re-fetch campaign to avoid detached entity state in the async thread
+            Campaign failedCampaign = campaignRepository.findById(campaignId).orElseThrow();
+            failedCampaign.setStatus(CampaignStatus.FAILED);
+            failedCampaign.setCompletedAt(System.currentTimeMillis());
+            campaignRepository.save(failedCampaign);
+        }
+    }
+
+    private void retryFailedChunksInBackground(String campaignId) {
+        log.info("Starting recovery engine for failed campaign {}", campaignId);
+        
+        List<CampaignChunk> allChunks = campaignChunkRepository.findByCampaignId(campaignId);
+        
+        // Find any chunk that is NOT completed
+        List<CampaignChunk> chunksToRetry = allChunks.stream()
+                .filter(c -> c.getStatus() != ChunkStatus.COMPLETED)
+                .toList();
+
+        if (chunksToRetry.isEmpty()) {
+            log.warn("Campaign {} retry called, but no incomplete chunks found.", campaignId);
+            return;
+        }
+
+        int successfulEnqueues = 0;
+        int consecutiveFailures = 0;
+
+        for (CampaignChunk chunk : chunksToRetry) {
+            try {
+                // Re-enqueue the exact same chunk ID
+                String jobId = jobProcessorClient.enqueueChunkJob(chunk.getId());
+                
+                chunk.setJobId(jobId);
+                chunk.setStatus(ChunkStatus.PENDING); // Reset back to pending
+                campaignChunkRepository.save(chunk);
+                
+                successfulEnqueues++;
+                consecutiveFailures = 0; 
+            } catch (Exception e) {
+                log.error("Retry failed for chunk {}: {}", chunk.getId(), e.getMessage());
+                consecutiveFailures++;
+                if (consecutiveFailures >= 3) {
+                    log.error("Worker still unresponsive. Aborting retry.");
+                    break; 
+                }
+            }
+        }
+
+        if (successfulEnqueues == 0) {
+            log.error("Zero chunks enqueued on retry. Campaign {} stays FAILED.", campaignId);
             Campaign failedCampaign = campaignRepository.findById(campaignId).orElseThrow();
             failedCampaign.setStatus(CampaignStatus.FAILED);
             failedCampaign.setCompletedAt(System.currentTimeMillis());
