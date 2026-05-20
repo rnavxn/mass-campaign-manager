@@ -6,6 +6,12 @@ import { UploadDropzone } from '../components/UploadDropzone';
 
 const STEPS = ['Details', 'Recipients', 'Launch'];
 
+const getMinDateTime = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 function StepIndicator({ current }) {
   return (
     <div className="flex items-center gap-2 mb-8 text-sm font-medium">
@@ -60,6 +66,13 @@ export default function CreateCampaign() {
   // Step 1
   const handleCreateDraft = async (e) => {
     e.preventDefault();
+
+    // THE FIX: If we already have an ID, don't spawn a clone! Just proceed.
+    if (campaignId) {
+      setStep(2);
+      return; 
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -144,7 +157,12 @@ export default function CreateCampaign() {
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1.5">Schedule (optional)</label>
-              <input type="datetime-local" className={`${inputCls} font-mono`} {...field('scheduledAt')} />
+              <input 
+                type="datetime-local" 
+                className={`${inputCls} font-mono`} 
+                min={getMinDateTime()}
+                {...field('scheduledAt')}
+              />
             </div>
           </div>
 
