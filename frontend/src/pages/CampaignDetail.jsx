@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Rocket, RefreshCw, UploadCloud, Trash2 } from 'lucide-react';
+import { ArrowLeft, Rocket, RefreshCw, UploadCloud, Trash2, CheckCircle2 } from 'lucide-react';
 import { api } from '../api/campaigns';
 import { useCampaign } from '../hooks/useCampaign';
 import { StatusBadge } from '../components/StatusBadge';
@@ -68,6 +68,7 @@ export default function CampaignDetail() {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const [replaceMode, setReplaceMode] = useState(false);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -77,6 +78,7 @@ export default function CampaignDetail() {
       const data = await api.uploadRecipients(id, file);
       setCampaign(prev => ({ ...prev, totalRecipients: data.totalRecipients }));
       setFile(null);
+      setReplaceMode(false);
     } catch (err) {
       setActionError(err.message);
     } finally {
@@ -215,8 +217,46 @@ export default function CampaignDetail() {
                 : 'No recipients yet. Upload a CSV to continue.'}
             </p>
           </div>
-
-          <UploadDropzone file={file} onChange={f => { setFile(f); setActionError(null); }} />
+          
+          {/* If we have recipients, no file selected yet, and aren't in replace mode, show the Success block */}
+          {campaign.totalRecipients > 0 && !file && !replaceMode ? (
+            <div className="border border-border bg-app rounded-lg p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-completed/10 text-completed rounded-full flex items-center justify-center">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{campaign.totalRecipients.toLocaleString()} Recipients Saved</p>
+                  <p className="text-xs text-muted mt-0.5">CSV data is safely stored in the database.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setReplaceMode(true)} 
+                className="text-xs font-medium text-muted hover:text-accent transition-colors px-3 py-1.5 border border-border rounded-md hover:border-accent"
+              >
+                Replace CSV
+              </button>
+            </div>
+          ) : (
+            /* Otherwise, show the standard dropzone */
+            <div className="space-y-3">
+              {replaceMode && (
+                <div className="flex items-center justify-between text-xs bg-secondary/30 border border-border px-3 py-2 rounded-md animate-fadeIn">
+                  <span className="text-muted">
+                      Uploading a new file will <span className="text-main font-medium">overwrite</span> the existing campaign recipients.
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => { setReplaceMode(false); setFile(null); }}
+                    className="text-accent hover:underline font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <UploadDropzone file={file} onChange={f => { setFile(f); setActionError(null); }} />
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2">
             <button
