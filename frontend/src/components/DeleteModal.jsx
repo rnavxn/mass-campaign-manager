@@ -10,7 +10,7 @@ export function DeleteModal({ name, status, onConfirm, onCancel, loading }) {
           <AlertCircle size={18} className="text-failed shrink-0" />
           <h3 className="font-semibold text-failed">Delete campaign?</h3>
         </div>
-        <p className="text-sm text-muted mb-2 leading-relaxed">
+        <p className="text-sm text-muted mb-2 leading-relaxed wrap-break-word">
           <span className="text-main font-medium">"{name}"</span> will be permanently deleted.
         </p>
         {!isDraft && (
