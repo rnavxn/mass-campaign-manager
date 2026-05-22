@@ -233,7 +233,7 @@ export default function CreateCampaign() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-muted mb-1">Campaign</p>
-                <p className="font-medium">{details.name}</p>
+                <p className="font-medium text-main text-base wrap-break-word">{details.name}</p>
               </div>
               <div>
                 <p className="text-xs text-muted mb-1">Channel</p>
