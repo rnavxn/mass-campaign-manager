@@ -34,3 +34,5 @@ build/
 
 ### Environmental Variables ###
 .env
+
+contacts_1m.csv
