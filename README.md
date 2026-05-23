@@ -47,7 +47,7 @@ graph TD
     MCM -->|"POST /jobs · Async Enqueue"| DJP
     DJP -->|"POST /process-chunk · Webhook"| MCM
     MCM -->|"Aggregate Counts · Pessimistic Lock"| DB
-````
+```
 
 ## Distributed Systems Design
 
@@ -59,6 +59,7 @@ The core challenge of this system is maintaining absolute data correctness under
 - **Fail-Fast Circuit Breaker:** The enqueuing loop safely aborts after 3 network failures to dead workers, preventing indefinite thread hanging and memory exhaustion.
 - **Idempotent Recovery:** Re-running a `FAILED` campaign queries original UUIDs to re-enqueue _only_ incomplete chunks, ensuring safe retries without duplicating data.
 
+---
 
 ## Features & Stack
 
@@ -75,6 +76,8 @@ The core challenge of this system is maintaining absolute data correctness under
 - **Database:** PostgreSQL 16
 - **Frontend:** React 19, React Router v7, Tailwind CSS v4
 - **Infrastructure:** Docker, Docker Compose, Nginx (Serving), Vite (Local Dev)
+
+---
 
 ## Local Setup
 
@@ -101,6 +104,8 @@ docker compose up --build
 
 _(Note: Ensure `POSTGRES_DB`, `JOB_PROCESSOR_URL`, and `APP_SELF_BASE_URL` are correctly mapped in your `.env` file)._
 
+---
+
 ## API Reference
 | **Method**  | **Endpoint**                         | **Description**                    |
 |-------------|--------------------------------------|------------------------------------|
@@ -113,6 +118,8 @@ _(Note: Ensure `POSTGRES_DB`, `JOB_PROCESSOR_URL`, and `APP_SELF_BASE_URL` are c
 | `GET`       | `/api/campaigns/:id/chunks`          | Fetch live chunk telemetry         |
 | `POST`      | `/api/internal/worker/process-chunk` | Webhook receiver from worker       |
 
+---
+
 ## Load Testing
 A zero-dependency Python script is included in the root directory to generate massive mock datasets for infrastructure scaling tests.
 
@@ -123,6 +130,14 @@ python3 generate_mock_data.py --rows 1000000 --output load_test.csv
 
 _(A lightweight `sample_10k.csv` is already included for quick functional testing)._
 
+---
+
 ## Related Repositories
 
 - [rnavxn/dist-job-processor](https://github.com/rnavxn/dist-job-processor) — The generic distributed worker node. Stateless and campaign-agnostic. Receives job payloads and fires completion webhooks.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
