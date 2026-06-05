@@ -1,4 +1,3 @@
-
 package com.example.mass_campaign_manager.service;
 
 import com.example.mass_campaign_manager.config.CampaignConstants;
@@ -14,6 +13,7 @@ import com.example.mass_campaign_manager.repository.CampaignRepository;
 import com.example.mass_campaign_manager.repository.RecipientRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
@@ -76,64 +76,86 @@ public class CampaignService {
         campaignRepository.delete(campaign);
     }
 
+    /**
+     * Parses and persists a massive CSV of recipients using a memory-efficient streaming approach.
+     * * @param campaignId The target DRAFT campaign.
+     * @param file The uploaded MultipartFile (expected to be CSV).
+     * @return CampaignResponse reflecting the new total recipient count.
+     */
+    @Transactional
     public CampaignResponse uploadRecipients(String campaignId, MultipartFile file) {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
-
+    
         if (campaign.getStatus() != CampaignStatus.DRAFT) {
             throw new RuntimeException("Recipients can only be uploaded to DRAFT campaigns");
         }
 
-        List<Recipient> recipients = parseCSV(file, campaignId);
+        // 1. Wipe existing recipients instantly via native SQL to prevent memory exhaustion
+        recipientRepository.bulkDeleteByCampaignId(campaignId);
+    
+        int totalProcessed = 0;
+        int batchSize = 5000;
 
-        // wipe existing recipients for this campaign before re-upload
-        recipientRepository.findByCampaignId(campaignId)
-                .forEach(recipientRepository::delete);
+        // Pre-allocate array capacity to prevent underlying array resizing overhead
+        List<Recipient> batch = new ArrayList<>(batchSize);
 
-        recipientRepository.saveAll(recipients);
-
-        campaign.setTotalRecipients(recipients.size());
-        campaignRepository.save(campaign);
-
-        return toResponse(campaign);
-    }
-
-    public List<CampaignChunk> getCampaignChunks(String campaignId) {
-        return campaignChunkRepository.findByCampaignId(campaignId);
-    }
-
-    // ── internals ────────────────────────────────────────────────────────────
-
-    private List<Recipient> parseCSV(MultipartFile file, String campaignId) {
-        List<Recipient> recipients = new ArrayList<>();
-
+        // 2. Use BufferedReader to stream the file line-by-line instead of loading the entire file into RAM
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String header = reader.readLine(); // skip header row
             if (header == null) throw new RuntimeException("CSV file is empty");
-
+    
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] cols = line.split(",", -1);
-                if (cols.length < 1 || cols[0].isBlank()) continue; // skip bad rows
 
+                // Skip completely empty lines or rows missing the primary contact field
+                if (cols.length < 1 || cols[0].isBlank()) continue;
+    
                 String contact = cols[0].trim();
                 String name = cols.length > 1 ? cols[1].trim() : null;
-
-                recipients.add(Recipient.builder()
+    
+                batch.add(Recipient.builder()
                         .id(UUID.randomUUID().toString())
                         .campaignId(campaignId)
                         .contact(contact)
                         .name(name)
                         .status(RecipientStatus.PENDING)
                         .build());
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to parse CSV: " + e.getMessage());
-        }
+                
+                totalProcessed++;
 
-        if (recipients.isEmpty()) throw new RuntimeException("CSV has no valid recipients");
-        return recipients;
+                // 3. JDBC Batch Insert: Once bucket is full, flush to DB and clear memory
+                if (batch.size() >= batchSize) {
+                    recipientRepository.saveAll(batch);
+                    batch.clear(); 
+                }
+            }
+
+            // 4. Flush any remaining records that didn't perfectly fill the final batch
+            if (!batch.isEmpty()) {
+                recipientRepository.saveAll(batch);
+                batch.clear();
+            }
+    
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to stream CSV: " + e.getMessage());
+        }
+    
+        if (totalProcessed == 0) throw new RuntimeException("CSV has no valid recipients");
+
+        // 5. Update the campaign's source-of-truth metadata
+        campaign.setTotalRecipients(totalProcessed);
+        campaignRepository.save(campaign);
+    
+        return toResponse(campaign);
     }
+    
+    public List<CampaignChunk> getCampaignChunks(String campaignId) {
+        return campaignChunkRepository.findByCampaignId(campaignId);
+    }
+
+    // ── internals ────────────────────────────────────────────────────────────
 
     private CampaignResponse toResponse(Campaign c) {
         return CampaignResponse.builder()

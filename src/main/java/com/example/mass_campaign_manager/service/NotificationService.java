@@ -11,7 +11,6 @@ import com.example.mass_campaign_manager.repository.RecipientRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
  
@@ -84,9 +83,6 @@ public class NotificationService {
 
     private void mockDispatch(Recipient recipient) {
         log.info("Dispatching to {} ({})", recipient.getContact(), recipient.getName());
-        if (Math.random() < 0.1) {
-            throw new RuntimeException("Simulated dispatch failure");
-        }
     }
  
     private void applyRateLimit(int rateLimitPerSecond) {
