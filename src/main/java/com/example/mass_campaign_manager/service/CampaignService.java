@@ -12,6 +12,7 @@ import com.example.mass_campaign_manager.repository.CampaignChunkRepository;
 import com.example.mass_campaign_manager.repository.CampaignRepository;
 import com.example.mass_campaign_manager.repository.RecipientRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,6 +25,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class CampaignService {
 
@@ -77,8 +79,36 @@ public class CampaignService {
     }
 
     /**
+     * Updates the technical execution parameters of a campaign.
+     * This ensures UI state changes (like adjusting chunk sizes) are permanently synced to the database
+     * before the campaign transitions out of the DRAFT state.
+     * @param id The ID of the campaign to update.
+     * @param chunkSize The number of recipients processed per DJP worker payload.
+     * @param rateLimit The throttle limit (per second) applied during webhook dispatch.
+     * @return CampaignResponse with the newly persisted settings.
+     */
+    public CampaignResponse updateCampaignSettings(String id, int chunkSize, int rateLimit) {
+        Campaign campaign = campaignRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Campaign not found"));
+
+        // Security check: Never alter execution parameters of an active or completed campaign
+        if (campaign.getStatus() != CampaignStatus.DRAFT) {
+            throw new RuntimeException("Settings can only be changed while in DRAFT status");
+        }
+
+        // Apply fallback defaults if the UI sends invalid zero/negative values
+        campaign.setChunkSize(chunkSize > 0 ? chunkSize : CampaignConstants.DEFAULT_CHUNK_SIZE);
+        campaign.setRateLimitPerSecond(rateLimit > 0 ? rateLimit : CampaignConstants.DEFAULT_RATE_LIMIT_PER_SECOND);
+
+        campaignRepository.save(campaign);
+
+        log.info("Updated campaign {} settings - Chunk Size: {}, Rate Limit: {}", id, chunkSize, rateLimit);
+        return toResponse(campaign);
+    }
+
+    /**
      * Parses and persists a massive CSV of recipients using a memory-efficient streaming approach.
-     * * @param campaignId The target DRAFT campaign.
+     * @param campaignId The target DRAFT campaign.
      * @param file The uploaded MultipartFile (expected to be CSV).
      * @return CampaignResponse reflecting the new total recipient count.
      */
@@ -89,6 +119,11 @@ public class CampaignService {
     
         if (campaign.getStatus() != CampaignStatus.DRAFT) {
             throw new RuntimeException("Recipients can only be uploaded to DRAFT campaigns");
+        }
+
+        // Validate File Type
+        if (file.getOriginalFilename() == null || !file.getOriginalFilename().toLowerCase().endsWith(".csv")) {
+            throw new RuntimeException("Invalid file type. Only .csv files are supported");
         }
 
         // 1. Wipe existing recipients instantly via native SQL to prevent memory exhaustion
@@ -102,9 +137,13 @@ public class CampaignService {
 
         // 2. Use BufferedReader to stream the file line-by-line instead of loading the entire file into RAM
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
-            String header = reader.readLine(); // skip header row
-            if (header == null) throw new RuntimeException("CSV file is empty");
-    
+            String header = reader.readLine();
+
+            // Validate CSV Headers
+            if (header == null || !header.toLowerCase().contains("contact")) {
+                throw new RuntimeException("CSV must contain a 'contact' column");
+            }
+
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] cols = line.split(",", -1);
