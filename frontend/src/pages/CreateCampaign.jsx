@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Rocket, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Rocket, CheckCircle2, Pencil, FileSpreadsheet } from 'lucide-react';
 import { api } from '../api/campaigns';
 import { UploadDropzone } from '../components/UploadDropzone';
 
@@ -51,7 +51,7 @@ export default function CreateCampaign() {
     name: '',
     channel: 'EMAIL',
     messageTemplate: '',
-    chunkSize: 50,
+    chunkSize: 5000, // Updated default to enterprise scale
     rateLimitPerSecond: 10,
     scheduledAt: '',
   });
@@ -63,27 +63,30 @@ export default function CreateCampaign() {
 
   const inputCls = "w-full bg-app border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all";
 
-  // Step 1
+  // Step 1: Create OR Update
   const handleCreateDraft = async (e) => {
     e.preventDefault();
-
-    // THE FIX: If we already have an ID, don't spawn a clone! Just proceed.
-    if (campaignId) {
-      setStep(2);
-      return; 
-    }
-
     setLoading(true);
     setError(null);
     try {
-      const data = await api.createCampaign({
-        ...details,
-        chunkSize: Number(details.chunkSize),
-        rateLimitPerSecond: Number(details.rateLimitPerSecond),
-        scheduledAt: details.scheduledAt ? new Date(details.scheduledAt).getTime() : null,
-      });
-      setCampaignId(data.id);
-      setStep(2);
+      if (campaignId) {
+        // We already created it. The user went back to edit settings. Hit the PUT endpoint!
+        await api.updateSettings(campaignId, {
+          chunkSize: Number(details.chunkSize),
+          rateLimitPerSecond: Number(details.rateLimitPerSecond)
+        });
+        setStep(2);
+      } else {
+        // First time creating
+        const data = await api.createCampaign({
+          ...details,
+          chunkSize: Number(details.chunkSize),
+          rateLimitPerSecond: Number(details.rateLimitPerSecond),
+          scheduledAt: details.scheduledAt ? new Date(details.scheduledAt).getTime() : null,
+        });
+        setCampaignId(data.id);
+        setStep(2);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -91,14 +94,25 @@ export default function CreateCampaign() {
     }
   };
 
-  // Step 2
+  // Step 2: Upload CSV
   const handleUpload = async () => {
-    if (!file) { setError('Select a CSV file first.'); return; }
+    if (!file && recipientCount === 0) { 
+      setError('Select a CSV file first.'); 
+      return; 
+    }
+    
+    // If user didn't select a new file but we already have recipients, just skip to Step 3
+    if (!file && recipientCount > 0) {
+      setStep(3);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const data = await api.uploadRecipients(campaignId, file);
       setRecipientCount(data.totalRecipients ?? 0);
+      setFile(null); // Clear file state after successful upload
       setStep(3);
     } catch (err) {
       setError(err.message);
@@ -107,7 +121,7 @@ export default function CreateCampaign() {
     }
   };
 
-  // Step 3
+  // Step 3: Launch
   const handleLaunch = async () => {
     setLoading(true);
     setError(null);
@@ -123,7 +137,6 @@ export default function CreateCampaign() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Page header with back link */}
       <div className="flex items-center gap-3 mb-6">
         <Link to="/" className="p-1.5 rounded-md text-muted hover:text-main hover:bg-border/40 transition-colors">
           <ArrowLeft size={18} />
@@ -141,7 +154,7 @@ export default function CreateCampaign() {
 
       {/* Step 1 — Details */}
       {step === 1 && (
-        <form onSubmit={handleCreateDraft} className="bg-surface border border-border rounded-lg p-6 space-y-5">
+        <form onSubmit={handleCreateDraft} className="bg-surface border border-border rounded-lg p-6 space-y-5 shadow-sm">
           <div>
             <label className="block text-xs font-medium text-muted mb-1.5">Campaign Name</label>
             <input required type="text" placeholder="e.g. Black Friday Blast" className={inputCls} {...field('name')} />
@@ -178,7 +191,7 @@ export default function CreateCampaign() {
 
           <div className="grid grid-cols-2 gap-4 border-t border-border pt-5">
             <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">Chunk Size</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Chunk Size (Rows per Worker)</label>
               <input type="number" min="1" className={`${inputCls} font-mono`} {...field('chunkSize')} />
             </div>
             <div>
@@ -198,12 +211,21 @@ export default function CreateCampaign() {
 
       {/* Step 2 — Recipients */}
       {step === 2 && (
-        <div className="bg-surface border border-border rounded-lg p-6 space-y-5">
-          <div>
-            <h2 className="font-semibold mb-1">Upload Recipients</h2>
-            <p className="text-sm text-muted">
-              CSV with <code className="font-mono bg-app px-1 py-0.5 rounded text-xs">contact</code> and <code className="font-mono bg-app px-1 py-0.5 rounded text-xs">name</code> columns.
-            </p>
+        <div className="bg-surface border border-border rounded-lg p-6 space-y-5 shadow-sm">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="font-semibold mb-1">Upload Recipients</h2>
+              <p className="text-sm text-muted">
+                CSV with <code className="font-mono bg-app px-1 py-0.5 rounded text-xs border border-border">contact</code> column required.
+              </p>
+            </div>
+            
+            {recipientCount > 0 && (
+              <div className="flex items-center gap-2 bg-completed/10 text-completed text-sm px-3 py-1.5 rounded-md border border-completed/20">
+                <CheckCircle2 size={16} />
+                <span className="font-medium">{recipientCount.toLocaleString()} Loaded</span>
+              </div>
+            )}
           </div>
 
           <UploadDropzone file={file} onChange={f => { setFile(f); setError(null); }} />
@@ -213,9 +235,9 @@ export default function CreateCampaign() {
               className="flex items-center gap-2 text-sm text-muted hover:text-main transition-colors px-3 py-2 rounded-md hover:bg-border/40">
               <ArrowLeft size={16} /> Back
             </button>
-            <button onClick={handleUpload} disabled={loading || !file}
+            <button onClick={handleUpload} disabled={loading || (!file && recipientCount === 0)}
               className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-5 py-2 rounded-md transition-colors disabled:opacity-50">
-              {loading ? 'Uploading…' : 'Upload & Next'} <ArrowRight size={16} />
+              {loading ? 'Processing…' : (file ? 'Upload & Next' : 'Keep Existing & Continue')} <ArrowRight size={16} />
             </button>
           </div>
         </div>
@@ -223,10 +245,15 @@ export default function CreateCampaign() {
 
       {/* Step 3 — Review & Launch */}
       {step === 3 && (
-        <div className="bg-surface border border-border rounded-lg p-6 space-y-5">
-          <div className="flex items-center gap-2 text-completed">
-            <CheckCircle2 size={20} />
-            <h2 className="font-semibold text-main">Ready to Launch</h2>
+        <div className="bg-surface border border-border rounded-lg p-6 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-completed">
+              <CheckCircle2 size={20} />
+              <h2 className="font-semibold text-main">Ready to Launch</h2>
+            </div>
+            <button onClick={() => setStep(1)} className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-accent transition-colors bg-app px-2.5 py-1.5 rounded border border-border">
+              <Pencil size={12} /> Edit Settings
+            </button>
           </div>
 
           <div className="bg-app border border-border rounded-md p-4 space-y-4 text-sm">
@@ -237,17 +264,19 @@ export default function CreateCampaign() {
               </div>
               <div>
                 <p className="text-xs text-muted mb-1">Channel</p>
-                <p className="font-mono">{details.channel}</p>
+                <p className="font-mono bg-surface border border-border inline-block px-2 py-0.5 rounded text-xs">{details.channel}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4 border-t border-border pt-4">
               <div>
-                <p className="text-xs text-muted mb-1">Recipients</p>
-                <p className="font-mono font-medium">{recipientCount.toLocaleString()}</p>
+                <p className="text-xs text-muted mb-1">Total Recipients</p>
+                <p className="font-mono font-medium flex items-center gap-1.5">
+                  <FileSpreadsheet size={14} className="text-muted"/> {recipientCount.toLocaleString()}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-muted mb-1">Chunk Size</p>
+                <p className="text-xs text-muted mb-1">Worker Chunk Size</p>
                 <p className="font-mono font-medium">{details.chunkSize}</p>
               </div>
               <div>
@@ -257,7 +286,9 @@ export default function CreateCampaign() {
             </div>
 
             <div className="border-t border-border pt-4">
-              <p className="text-xs text-muted mb-2">Message Template</p>
+              <p className="text-xs text-muted mb-2 flex items-center justify-between">
+                Message Template
+              </p>
               <pre className="bg-surface border border-border p-3 rounded text-xs text-muted font-mono whitespace-pre-wrap break-words">
                 {details.messageTemplate}
               </pre>
@@ -270,8 +301,8 @@ export default function CreateCampaign() {
               <ArrowLeft size={16} /> Back
             </button>
             <button onClick={handleLaunch} disabled={loading}
-              className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-5 py-2 rounded-md transition-colors disabled:opacity-50">
-              {loading ? 'Launching…' : 'Launch Campaign'} <Rocket size={16} />
+              className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium px-6 py-2.5 rounded-md transition-colors disabled:opacity-50 shadow-sm">
+              {loading ? 'Launching…' : 'Launch Campaign'} <Rocket size={18} />
             </button>
           </div>
         </div>

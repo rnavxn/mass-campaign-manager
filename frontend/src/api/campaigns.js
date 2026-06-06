@@ -41,4 +41,14 @@ export const api = {
 
   deleteCampaign: (id) =>
     fetch(`${BASE}/campaigns/${id}`, { method: 'DELETE' }).then(handleResponse),
+
+  updateSettings: async (id, data) => {
+    const res = await fetch(`/api/campaigns/${id}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Failed to update settings');
+    return res.json();
+  },
 };
